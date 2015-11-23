@@ -195,10 +195,12 @@ function AgentGuard:EngageEnemyTargets( streamed_players )
 			-- collect all actors in nearby cells
 			for i=1,#cells do
 				local cell = cells[i]
-				for j=1,#cell.actors do
-					local actor = cell.actors[j]
-					if not actor.dead and not IsFriendly[agent_faction][actor_faction] then
-						table.insert( actors, actor )
+				if cell then
+					for j=1,#cell.actors do
+						local actor = cell.actors[j]
+						if not actor.dead and not IsFriendly[agent_faction][actor_faction] then
+							table.insert( actors, actor )
+						end
 					end
 				end
 			end
@@ -209,7 +211,7 @@ function AgentGuard:EngageEnemyTargets( streamed_players )
 		local t = self.ai_targets
 		for i=1,#t do
 			local actor = t[i]
-			if actor and IsValid( actor ) then
+			if actor then
 				local actor_faction = actor.faction
 				if agent_faction ~= actor_faction then
 					local has_los, request_made = self:NPCInLoS( actor )

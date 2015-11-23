@@ -197,7 +197,7 @@ function CellMainLoop( e )
 
 				for i=1,#connected_cells do
 					local connected_cell = connected_cells[i]
-					if not ActiveCells[connected_cell.id] then
+					if connected_cell and not ActiveCells[connected_cell.id] then
 						ActiveCells[connected_cell.id] = true
 						insert( CellList, connected_cell )
 					end
@@ -412,12 +412,13 @@ function CheckCellForCleanup( x, y )
 
 	for i=1, #cells do
 		local cell = cells[i]
+		if cell then
+			local cells_players, cells_traffic, cells_pedestrians = GetConnectedCellsInfo( cell.x, cell.y )
 
-		local cells_players, cells_traffic, cells_pedestrians = GetConnectedCellsInfo( cell.x, cell.y )
-
-		if cells_players == 0 then
-			if cells_traffic > 0 or cells_pedestrians > 0 then
-				CleanupCell( cell.x, cell.y )
+			if cells_players == 0 then
+				if cells_traffic > 0 or cells_pedestrians > 0 then
+					CleanupCell( cell.x, cell.y )
+				end
 			end
 		end
 	end
@@ -547,9 +548,11 @@ function GetConnectedCellsInfo( x, y )
 
 	for i=1,#connected_cells do
 		local connected_cell = connected_cells[i]
-		cells_players = cells_players + #connected_cell.players
-		cells_traffic = cells_traffic + #connected_cell.vehicle_traffic
-		cells_pedestrians = cells_pedestrians + #connected_cell.pedestrian_traffic
+		if connected_cell then
+			cells_players = cells_players + #connected_cell.players
+			cells_traffic = cells_traffic + #connected_cell.vehicle_traffic
+			cells_pedestrians = cells_pedestrians + #connected_cell.pedestrian_traffic
+		end
 	end
 
 	return cells_players, cells_traffic, cells_pedestrians

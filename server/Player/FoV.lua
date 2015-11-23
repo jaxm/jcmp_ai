@@ -36,15 +36,17 @@ function IsPositionInCellPlayersFoV( position, cell )
 	local connected_cells = GetNearbyCells( cell.x, cell.y )
 	for c=1,#connected_cells do
 		local cell = connected_cells[c]
-		for i=1,#MapCells[cell.x][cell.y].players do
-			local player = MapCells[cell.x][cell.y].players[i]
-			if player and IsValid(player) then
-				if position:Distance( player:GetPosition() ) < 45 then
-					return true
-				end
+		if cell then
+			for i=1,#MapCells[cell.x][cell.y].players do
+				local player = MapCells[cell.x][cell.y].players[i]
+				if player and IsValid(player) then
+					if position:Distance( player:GetPosition() ) < 45 then
+						return true
+					end
 
-				if IsPositionInPlayerFoV( position, player ) then
-					return true
+					if IsPositionInPlayerFoV( position, player ) then
+						return true
+					end
 				end
 			end
 		end

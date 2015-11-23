@@ -30,7 +30,7 @@ function HeatEvent:Tick()
 		if cell_table and #cell_table > 0 then
 			local random_cell = table.randomvalue( cell_table )
 
-			if random_cell ~= cell then
+			if random_cell and random_cell ~= cell then
 				-- find node within random_cell to spawn heat agent at
 				local nodes = random_cell.nodes[1]
 				if nodes and #nodes > 0 then

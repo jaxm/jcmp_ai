@@ -22,7 +22,7 @@ function Traffic:__init( position, angle, faction, lane, cell )
 	local random_node = nil
 	for i=1,#connected_cells do
 		local cell = connected_cells[i]
-		if cell ~= current_cell then
+		if cell and cell ~= current_cell then
 			local cell_nodes = cell.nodes[1]
 			if cell_nodes then
 				local node_count = #cell_nodes

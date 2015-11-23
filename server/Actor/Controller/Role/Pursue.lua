@@ -167,10 +167,12 @@ function AgentPursue:EngageEnemyTargets( streamed_players )
 			-- collect all actors in nearby cells
 			for i=1,#cells do
 				local cell = cells[i]
-				for j=1,#cell.actors do
-					local actor = cell.actors[j]
-					if not actor.dead and agent_faction ~= actor.faction and not IsFriendly[agent_faction][actor.faction] then
-						table.insert( actors, actor )
+				if cell then
+					for j=1,#cell.actors do
+						local actor = cell.actors[j]
+						if not actor.dead and agent_faction ~= actor.faction and not IsFriendly[agent_faction][actor.faction] then
+							table.insert( actors, actor )
+						end
 					end
 				end
 			end
