@@ -36,7 +36,7 @@ function HeatEvent:Tick()
 				if nodes and #nodes > 0 then
 					local random_node = table.randomvalue( nodes )
 
-					if random_node then
+					if random_node and random_node.vehicle_node then
 						-- spawn agent
 						local side = ceil(random(2))
 						local agent = nil

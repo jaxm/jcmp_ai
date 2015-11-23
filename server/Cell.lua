@@ -291,9 +291,9 @@ function ProcessCell( x, y )
 			if #cell.vehicle_traffic < CellVehicleTrafficLimit then
 				-- add vehicle traffic
 
-				local random_node = road_nodes[random( 1, #road_nodes )]
+				local random_node = table.randomvalue( road_nodes )
 				local neighbours = #random_node.neighbours
-				if random_node and neighbours > 0 and neighbours < 3 then
+				if random_node and neighbours > 0 and neighbours < 3 and random_node.vehicle_node then
 					SpawnVehicleAtNode( random_node, cell )
 				end
 			end
@@ -306,7 +306,7 @@ function ProcessCell( x, y )
 				local spawn_limit_frame = floor(CellPedTrafficLimit - current_pedestrians )*.25
 				local i = 1
 				while i <= spawn_limit_frame do
-					local random_node = road_nodes[random( 1, #road_nodes )]
+					local random_node = table.randomvalue( road_nodes )
 					local neighbours = #random_node.neighbours
 					if random_node and random_node.pedestrian_node and neighbours > 0 and neighbours < 3 then
 						SpawnPedestrianAtNode( random_node, cell )
@@ -343,7 +343,6 @@ function ProcessCell( x, y )
 
 							local new_cells_players, new_cells_traffic, new_cells_pedestrians = GetConnectedCellsInfo( px, py )
 
-							-- if new_cells_players > 0 and new_cells_pedestrians < new_cells_pedestrians then
 							-- if cell contains players and is currently under the CellPedTrafficLimit, transfer ped
 							if new_cells_players > 0 and new_cells_pedestrians < CellPedTrafficLimit then
 								RemovePedestrianTrafficFromCell( ped, x, y )
@@ -690,10 +689,12 @@ end
 
 Events:Subscribe( 'ModuleLoad', function()
 	for p in Server:GetPlayers() do
-		local position = p:GetPosition()
-		local player_x, player_y = GetCellXYFromPosition( position )
-		AddPlayerToCell( p, player_x, player_y )
-		p:SetValue( 'cell', {x=player_x, y=player_y} )
+		if p and IsValid(p) then
+			local position = p:GetPosition()
+			local player_x, player_y = GetCellXYFromPosition( position )
+			AddPlayerToCell( p, player_x, player_y )
+			p:SetValue( 'cell', {x=player_x, y=player_y} )
+		end
 	end
 end )
 

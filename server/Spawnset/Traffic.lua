@@ -20,32 +20,33 @@ function Traffic:__init( position, angle, faction, lane, cell )
 	local connected_cells = GetNearbyCells( current_cell.x, current_cell.y )
 
 	local random_node = nil
-	while random_node == nil do
-		for i=1,#connected_cells do
-			local cell = connected_cells[i]
-			if cell ~= current_cell then
-				local cell_nodes = cell.nodes[1]
-				if cell_nodes then
-					local node_count = #cell_nodes
-					if node_count > 1 then
-						local num = random( 1, node_count )
-						random_node = cell_nodes[num]
+	for i=1,#connected_cells do
+		local cell = connected_cells[i]
+		if cell ~= current_cell then
+			local cell_nodes = cell.nodes[1]
+			if cell_nodes then
+				local node_count = #cell_nodes
+				if node_count > 1 then
+					local num = random( 1, node_count )
+					random_node = cell_nodes[num]
 
-						local dist = position:Distance( random_node.position )
-						if dist < 50 then
-							random_node = nil
-						end
+					local dist = position:Distance( random_node.position )
+					if dist < 50 then
+						random_node = nil
 					end
+				end
 
-					if random_node then
-						Debug = true
-						GeneratePath( position, random_node, self, 1, PathPriority.Low, math.deg( angle.yaw ) )
-						Debug = false
-						return
-					end
+				if random_node then
+					GeneratePath( position, random_node, self, 1, PathPriority.Low, math.deg( angle.yaw ) )
+					return
 				end
 			end
 		end
+	end
+
+	-- if no node was found, remove
+	if not random_node then
+		self:Remove()
 	end
 end
 
@@ -65,7 +66,7 @@ function Traffic:PathSuccess( t )
 		end
 
 
-		local model_id = TrafficVehicleModels[math.random(1, #TrafficVehicleModels)]
+		local model_id = table.randomvalue( TrafficVehicleModels )
 		-- local model_id = 35
 		self.vehicle = Vehicle.Create( {
 			model_id = model_id,
@@ -86,7 +87,7 @@ function Traffic:PathSuccess( t )
 
 		local actorModels = faction_info.actorModels
 
-		local model = actorModels[random( 1, #actorModels )]
+		local model = table.randomvalue( actorModels )
 		self.occupants = {}
 
 		-- occupants

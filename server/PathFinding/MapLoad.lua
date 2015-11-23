@@ -98,6 +98,14 @@ function LoadMesh( path, map_id )
         	node.pedestrian_node = true
         end
 
+        local road_type = node.info.road_type
+
+        if road_type == RoadType.ROADTYPE_NORMAL or
+         	road_type == RoadType.GROUND_ROAM or
+         	road_type == RoadType.SPLINE then
+         	node.vehicle_node = true
+         end
+
         -- add node to cell
         local cell_x, cell_y = GetCellXYFromPosition( node.position )
 

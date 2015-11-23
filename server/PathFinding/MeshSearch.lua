@@ -1,7 +1,7 @@
 -- build list of available nav mesh files
 GridCellSaved = {}
 CellsLoaded = 0
-CellsLoadedLimit = 12 -- increasing this value will keep more mesh cells loaded in memory
+CellsLoadedLimit = 80 -- increasing this value will keep more mesh cells loaded in memory
 LoadedCellTimers = {}
 
 function RegisterFile( x, y, name )
