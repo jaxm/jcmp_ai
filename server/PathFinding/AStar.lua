@@ -1,5 +1,6 @@
 
 GeneratedPaths = {}
+RequestedPaths = {}
 time_left = 0
 
 function GeneratePath( from, to, entity, type, priority, starting_yaw )
@@ -16,18 +17,22 @@ function GeneratePath( from, to, entity, type, priority, starting_yaw )
 	local y = nil
 
 	if type == 2 then
-		
+
 		-- mesh navigation
-		x, y, cell = GetMeshCellFromPosition( from )
-
-		if not IsCellLoaded( x, y ) then
-			LoadCell( x, y )
-			cell = GetMeshCell( x, y )
+		local t = {
+			from = from,
+			to = to,
+			entity = entity,
+			type = type,
+			priority = priority
+		}
+		if starting_yaw then
+			t.starting_yaw = starting_yaw
 		end
-		start_node = MeshCellGetClosestNodeToPosition( x, y, from )
-		end_node = MeshCellGetClosestNodeToPosition( x, y, to )
 
-		search_type = MeshSearch
+		table.insert( RequestedPaths, t )
+
+		return
 	else
 		if from.__type == 'Vector3' then
     		start_node = GetClosestNode( from, type )
@@ -163,7 +168,7 @@ function AStarSearch( start, goal, entity, type, priority, starting_yaw, cell )
    	end
 
    	if reached_goal then
-	   	came_from = ReconstructPath( came_from, start, goal, last_yaw )
+	   	came_from = ReconstructPath( came_from, start, goal, last_yaw, frame_timer )
 		table.insert( GeneratedPaths, { entity = entity, success = true, start = start, goal = goal, path = came_from, type = type } )
 	else
 		table.insert( GeneratedPaths, { entity = entity, success = false, reason = reason } )
@@ -188,14 +193,23 @@ function GetYawDifference( next_yaw, last_yaw )
 	return deg(abs( deltaRotation.yaw )), a0
 end
 
-function ReconstructPath( came_from, start, goal, yaw_table )
+function ReconstructPath( came_from, start, goal, yaw_table, frame_timer )
 	-- previously returned just position, now returning entire node
 	local current = goal
 	local path = { { position = current.position, id = current.id, yaw = yaw_table[current] } }
 	local previous = nil
 	local time_out = Timer()
+	local frame_limit = time_left
+	local insert = table.insert
 
 	while current ~= start do
+
+		local running_time = tGetMS(frame_timer)
+		if running_time > frame_limit then
+			frame_timer:Restart()
+			coroutine.yield()
+		end
+
 		current = came_from[current]
 		if current == nil then
 			break
@@ -208,7 +222,7 @@ function ReconstructPath( came_from, start, goal, yaw_table )
 		if previous ~= nil and came_from[current] == came_from[previous] then
 			-- skip
 		else
-			table.insert( path, { position = current.position, id = current.id, yaw = yaw_table[current] } )
+			insert( path, { position = current.position, id = current.id, yaw = yaw_table[current] } )
 			previous = current
 		end
 	end
@@ -322,6 +336,76 @@ function Heuristic.CARDINTCARD( a, b )
     return min(dx,dy) * sqrt(2) + math.max(dx,dy) - min(dx,dy)
 end
 
+request_timer = Timer()
+function LoadRequestedMeshPathsCells()
+	if request_timer:GetMilliseconds() < 250 then return end
+	request_timer:Restart()
+
+	local i = 1
+	while i<= #RequestedPaths do
+		local info = RequestedPaths[i]
+		local start_x = 0
+		local start_y = 0
+		local start_cell = nil
+
+		if info.from.__type == 'Vector3' then
+			start_x, start_y, start_cell = GetMeshCellFromPosition( info.from )
+		else
+			start_x, start_y, start_cell = GetMeshCellFromPosition( info.from.position )
+		end
+
+		if not IsCellLoaded( start_x, start_y ) then
+			if not IsCellLoading( start_x, start_y ) then
+				LoadCell( start_x, start_y )
+			end
+		end
+		local x = nil
+		local y = nil
+		if info.to.__type == 'Vector3' then
+			x, y = GetMeshCellFromPosition( info.to )
+		else
+			x, y = GetMeshCellFromPosition( info.to.position )
+		end
+
+		if not IsCellLoaded( x, y ) then
+			if not IsCellLoading( x, y ) then
+				LoadCell( x, y )
+			end
+			i = i + 1
+		else
+			if x and y then
+				if info.from.__type == 'Vector3' then
+					info.from = MeshCellGetClosestNodeToPosition( start_x, start_y, info.from )
+				end
+				if info.to.__type == 'Vector3' then
+					info.to = MeshCellGetClosestNodeToPosition( x, y, info.to )
+				end
+				if info.from and info.to and info.entity then
+					local co = coroutine.create( MeshSearch )
+					local success, error_msg = coroutine.resume( co, info.from, info.to, info.entity, info.type, info.priority, info.starting_yaw, start_cell )
+					if not success then
+						error(error_message)
+					end
+					if info.priority == PathPriority.High then
+						table.insert( CurrentPaths.High, co )
+					elseif info.priority == PathPriority.Medium then
+						table.insert( CurrentPaths.Medium, co )
+					else
+						table.insert( CurrentPaths.Low, co )
+					end
+					table.remove( RequestedPaths, i )
+				else
+					-- path generation failed
+					table.insert( GeneratedPaths, { entity = info.entity, success = false, reason = 'start or end invalid' } )
+					table.remove( RequestedPaths, i )
+				end
+			else
+				table.remove( RequestedPaths, i )
+			end
+		end
+	end
+end
+
 function GlobalPathsTick()
 
 	local remove = table.remove
@@ -422,6 +506,7 @@ function GlobalPathsTick()
 end
 
 Console:Subscribe( 'paths', function( ... )
+	print( 'RequestedPaths: ', #RequestedPaths )
 	print( 'High Priority Paths: ', #CurrentPaths.High )
 	print( 'Medium Priority Paths: ', #CurrentPaths.Medium )
 	print( 'Low Priority Paths: ', #CurrentPaths.Low )

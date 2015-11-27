@@ -10,8 +10,9 @@ function MainPostTick( e )
 	local partial_time = Timer()
 	total_timer:Restart()
 	time_left = 16.7
-	-- agent logic
 	SetUnicode(false)
+	
+	-- agent logic
 	AM:LogicTick(e)
 	UpdateFrameTime( tGetMS(partial_time) )
 	tRestart(partial_time)
@@ -43,12 +44,11 @@ function MainPostTick( e )
 	UpdateFrameTime( tGetMS(partial_time) )
 	tRestart(partial_time)
 
-	if time_left <= 0 then SetUnicode(true) return end
-
-	-- agent logic extended
-	AM:LogicTickExtended(e)
+	LoadRequestedMeshPathsCells()
 	UpdateFrameTime( tGetMS(partial_time) )
 	tRestart(partial_time)
+
+	if time_left <= 0 then SetUnicode(true) return end
 
 	SetUnicode(true)
 

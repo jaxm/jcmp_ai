@@ -31,7 +31,10 @@ for x=-32,32,1 do
 		if not MeshCell[x] then
 			MeshCell[x] = {}
 		end
-		MeshCell[x][y] = {}
+		MeshCell[x][y] = {
+			x = x,
+			y = y
+		}
 	end
 end
 
@@ -85,7 +88,6 @@ function LoadCell( x, y )
 			    if file ~= nil then 
 			        local data = file:read("*a")
 			        if data ~= nil then
-			        	-- data = string.trim( data )
 			        	local co = coroutine.create( LoadCellMesh )
 						local success, error_msg = coroutine.resume( co, MeshCell[x][y], data, x, y )
 						if not success then
@@ -130,50 +132,95 @@ function LoadCellMesh( cell, data, x, y )
 	local timer = Timer()
 	local NodePosById = {}
 	local midPoint = Vector3( x*512, 0, y*512 )
+	local midPoint_x = midPoint.x
+	local midPoint_z = midPoint.z
 	local quarters = Copy( QuarterTemplate )
 	local frame_timer = Timer()
 	local ms = 0
 	local yields = 0
+	local clamp = math.clamp
+	local tGetMS = Timer.GetMilliseconds
 
 	local msg = require 'MessagePack'
 
     local t = {}
-	for _, v in msg.unpacker(data) do
-		local node = v
+	for _, node in msg.unpacker(data) do
 		t[#t+1] = node
-    	node.position = TableToVector3( node.position )
+		local position = node.position -- currently a table ( save format )
+    	local position_x = position.x
+    	local position_z = position.z
+    	-- convert table to vector
+    	node.position = Vector3( position_x, position.y, position_z )
+    	-- mark node with cell x, y
     	node.x = x
     	node.y = y
+    	-- fast node lookup by id
         NodePosById[node.id] = node
 
-        local clamp = math.clamp
+        -- mark cell edges
+        DefineCellEdge( node )
 
-        local x = clamp( floor( (node.position.x - midPoint.x) / 32 ), 1, 16 )
-        local z = clamp( floor( (node.position.z - midPoint.z) / 32 ), 1, 16 )
+        -- cell sub division
+        local x = clamp( floor( (position_x - midPoint_x) / 32 ), 1, 16 )
+        local z = clamp( floor( (position_z - midPoint_z) / 32 ), 1, 16 )
 
-        if quarters[x][z] then
-        	quarters[x][z][#quarters[x][z]+1] = node
+        local quarter = quarters[x][z]
+        if quarter then
+        	quarter[#quarter+1] = node
         end
 
-        local time = frame_timer:GetMilliseconds()
+        local time = tGetMS( frame_timer )
         if time > time_left then
         	frame_timer:Restart()
-        	-- co_count = 0
         	yields = yields + 1
         	ms = ms + time
         	coroutine.yield()
         end
     end
 
-    MeshCell[x][y].nodes = t
-    MeshCell[x][y].id = NodePosById
-    MeshCell[x][y].quarters = quarters
-    MeshCell[x][y].timer = Timer()
-    MeshCell[x][y].loaded = true
-    MeshCell[x][y].loading = false
-    table.insert(LoadedCellTimers, { timer = MeshCell[x][y].timer, x = x, y = y } )
-    -- print('NavMeshLoad (x:'..tostring(x)..', y:'..tostring(y)..') took '..tostring(ms)..'ms, actual:'..tostring(timer:GetMilliseconds())..'ms, yield count: '..tostring(yields), 'Nodes:',#t, 'nodes/ms:', #t/ms )
+    -- complete, save to global cell table
+    cell.nodes = t
+    cell.id = NodePosById
+    cell.quarters = quarters
+    cell.timer = Timer()
+    cell.loaded = true
+    cell.loading = false
+    table.insert(LoadedCellTimers, { timer = cell.timer, x = x, y = y } )
+    print('NavMeshLoad (x:'..tostring(x)..', y:'..tostring(y)..') took '..tostring(ms)..'ms, actual:'..tostring(timer:GetMilliseconds())..'ms, yield count: '..tostring(yields), 'Nodes:',#t, 'nodes/ms:', #t/ms )
     CellsLoaded = CellsLoaded + 1
+end
+
+function DefineCellEdge( node )
+    if #node.neighbours == 5 then
+		local x = node.x
+		local y = node.y
+	    local position = node.position
+    	-- check if edge
+    	local cell_x, cell_y, connected_cell = GetMeshCellFromPosition( position + Vector3(12,0,0) )
+    	if x ~= cell_x or y ~= cell_y then
+    		node.edge = true
+    		node.connected_cell = connected_cell
+    		return
+    	end
+		local cell_x, cell_y, connected_cell = GetMeshCellFromPosition( position + Vector3(-12,0,0) )
+    	if x ~= cell_x or y ~= cell_y then
+    		node.edge = true
+    		node.connected_cell = connected_cell
+    		return
+    	end
+		local cell_x, cell_y, connected_cell = GetMeshCellFromPosition( position + Vector3(0,0,12) )
+    	if x ~= cell_x or y ~= cell_y then
+    		node.edge = true
+    		node.connected_cell = connected_cell
+    		return
+    	end
+    	local cell_x, cell_y, connected_cell = GetMeshCellFromPosition( position + Vector3(0,0,-12) )
+    	if x ~= cell_x or y ~= cell_y then
+    		node.edge = true
+    		node.connected_cell = connected_cell
+    		return
+    	end
+    end
 end
 
 function CheckCellStatus()
@@ -281,12 +328,13 @@ end
 
 function GetMeshQuarterFromPosition( x, y, position )
 	local cell = MeshCell[x][y]
+	local clamp = math.clamp
 	if cell then
 	    cell.timer:Restart()
 		local midPoint = Vector3( x*512, 0, y*512 )
 
-	    local qx = floor( (position.x - midPoint.x) / 32 )
-	    local qz = floor( (position.z - midPoint.z) / 32 )
+	    local qx = clamp( floor( (position.x - midPoint.x) / 32 ), 1, 16 )
+        local qz = clamp( floor( (position.z - midPoint.z) / 32 ), 1, 16 )
 	    if cell.quarters[qx] and cell.quarters[qx][qz] then
 	    	return cell.quarters[qx][qz], qx, qz
 	    end
@@ -312,6 +360,7 @@ function MeshSearch( start, goal, entity, type, priority, starting_yaw, cell )
   	local frame_timer = Timer()
   	local timeout = 1000
   	local goal_position = goal.position
+  	local node_cell = {}
   	if priority == PathPriority.Medium then
   		timeout = 2000
   	elseif priority == PathPriority.High then
@@ -338,77 +387,66 @@ function MeshSearch( start, goal, entity, type, priority, starting_yaw, cell )
  			local next = current.neighbours[i]
  			if next ~= nil then
 	   			local next_yaw = next.yaw
-	   			local next = GetMeshNodeById( next.id, cell )
+	   			local next = GetMeshNodeById( next.id, node_cell[current] or cell )
 
 	   			-- cell traversal start
-	   			if next ~= nil then
-	   				local n_position = next.position
-		   			local cell_x, cell_y = GetMeshCellFromPosition( n_position )
-		   			if cell_x ~= next.x or cell_y ~= next.y then
-		   				-- pause pathfinding until cell is loaded
-		   				while not IsCellLoaded( cell_x, cell_y ) do
-		   					if not IsCellLoading( cell_x, cell_y ) then
-		   						LoadCell( cell_x, cell_y )
-		   					end
-		   					local running_time = tGetMS(frame_timer)
-							time_so_far = time_so_far + running_time
-							frame_timer:Restart()
-		   					coroutine.yield()
-		   				end
-		   				-- mesh cell traversal
-		   				local node = MeshCellGetClosestNodeToPosition( cell_x, cell_y, n_position )
-		   				if node then
-			   				local new_cost = cost_so_far[current] + Heuristic.EUCLIDIAN( current_position, n_position )
-			   				local next_cost = cost_so_far[node]
-			   				if next_cost == nil or new_cost < next_cost then
-			   					cost_so_far[node] = new_cost
-				   				local priority = new_cost + Heuristic.EUCLIDIAN( node.position, goal_position )
-				   				frontier:Put( node, priority )
-				   				came_from[node] = current
-				   				previous = current
+	   			if next then
+		   			if next.edge then
+		   				node_cell[next] = GetMeshCell(next.x, next.y)
+				   		local n_position = next.position
+				   		local connected_cell = next.connected_cell
+				   		if connected_cell then
+				   			-- load connected_cell if needed
+				   			while not IsCellLoaded( connected_cell.x, connected_cell.y ) do
+			   					if not IsCellLoading( connected_cell.x, connected_cell.y ) then
+			   						LoadCell( connected_cell.x, connected_cell.y )
+			   					end
+			   					local running_time = tGetMS(frame_timer)
+								time_so_far = time_so_far + running_time
+								frame_timer:Restart()
+			   					coroutine.yield()
+			   				end
+			   				-- cell loaded
+			   				local node = MeshCellGetClosestNodeToPosition( connected_cell.x, connected_cell.y, n_position )
 
-				   				if current == goal then
-						   			-- we've reached our goal
-						   			reached_goal = true
-						   			if came_from[goal] == nil then
-						   				came_from[goal] = previous
-						   			end
-						   			break
-						   		end
+			   				if node then
+					   			node_cell[node] = GetMeshCell(node.x, node.y)
+					   			next = node
+					   		end
+				   		end
+				   	end
+			   		-- cell traversal end
+
+		   			-- is it a valid node?
+		   			-- is the node blocked by something?
+		   			if not next.blocked then
+		   				local parent = came_from[current]
+		   				if parent and last_yaw[parent] == next_yaw then
+		   					local new_cost = cost_so_far[parent] + Heuristic.EUCLIDIAN( next.position, parent.position )
+		   					local next_cost = cost_so_far[next]
+		   					if not next_cost or new_cost < next_cost then
+		   						cost_so_far[next] = new_cost
+				   				local priority = new_cost + Heuristic.EUCLIDIAN( goal.position, next.position )
+				   				frontier:Put( next, priority )
+				   				came_from[next] = parent
+				   				previous = parent
+				   				node_cell[next] = GetMeshCell(next.x, next.y)
+				   			end
+		   				else
+				   			local new_cost = cost_so_far[current] + Heuristic.EUCLIDIAN( current.position, next.position ) -- current , next
+				   			local next_cost = cost_so_far[next]
+				   			if next_cost == nil or new_cost < next_cost then
+				   				cost_so_far[next] = new_cost
+				   				local priority = new_cost + Heuristic.EUCLIDIAN( next.position, goal.position )
+				   				frontier:Put( next, priority )
+				   				came_from[next] = current
+				   				previous = current
+				   				last_yaw[next] = next_yaw
+				   				node_cell[next] = GetMeshCell(next.x, next.y)
 				   			end
 				   		end
-		   			end
-			   	end
-
-		   		-- cell traversal end
-
-	   			-- is it a valid node?
-	   			-- is the node blocked by something?
-	   			if next and not next.blocked then
-	   				local parent = came_from[current]
-	   				if parent and last_yaw[parent] == next_yaw then
-	   					local new_cost = cost_so_far[parent] + Heuristic.EUCLIDIAN( next.position, parent.position )
-	   					local next_cost = cost_so_far[next]
-	   					if not next_cost or new_cost < next_cost then
-	   						cost_so_far[next] = new_cost
-			   				local priority = new_cost + Heuristic.EUCLIDIAN( goal.position, next.position )
-			   				frontier:Put( next, priority )
-			   				came_from[next] = parent
-			   				previous = parent
-			   			end
-	   				else
-			   			local new_cost = cost_so_far[current] + Heuristic.EUCLIDIAN( current.position, next.position ) -- current , next
-			   			local next_cost = cost_so_far[next]
-			   			if next_cost == nil or new_cost < next_cost then
-			   				cost_so_far[next] = new_cost
-			   				local priority = new_cost + Heuristic.EUCLIDIAN( next.position, goal.position )
-			   				frontier:Put( next, priority )
-			   				came_from[next] = current
-			   				previous = current
-			   				last_yaw[next] = next_yaw
-			   			end
 			   		end
-		   		end
+			   	end
 		   	end
 
 			local running_time = tGetMS(frame_timer)
@@ -421,7 +459,7 @@ function MeshSearch( start, goal, entity, type, priority, starting_yaw, cell )
    	end
 
    	if reached_goal then
-	   	came_from = ReconstructPath( came_from, start, goal, last_yaw )
+	   	came_from = ReconstructPath( came_from, start, goal, last_yaw, frame_timer )
 		table.insert( GeneratedPaths, { entity = entity, success = true, start = start, goal = goal, path = came_from, type = type } )
 	else
 		table.insert( GeneratedPaths, { entity = entity, success = false } )
